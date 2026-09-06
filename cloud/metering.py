@@ -83,8 +83,6 @@ _IP_SPECIFIC_HINTS = (
     # — the same symptom as the 19-aug server-IP ban. A truly dead link costs
     # ~3 MB to re-check; a real video wrongly refused costs the job.
     "video unavailable",
-    "available in your country", "in your country", "geo-restricted", "geoblock",
-    "blocked it in your country",
     "remote end closed", "connection refused", "network is unreachable",
     "name or service not known", "eof occurred",
 )
@@ -94,6 +92,12 @@ _CONTENT_HINTS = (
     "unsupported url", "no video formats found", "premieres in", "will begin in",
     "this live event", "no duration in metadata", "requested format is not available",
     "account has been terminated", "video is age", "confirm your age",
+    # An uploader's country block: the residential pool exits from the same
+    # blocked countries, so the paid probe failed with the identical error in
+    # 5 of the 6 cases between 3-sep and 5-sep-2026 (3.6 MB each, and the
+    # Telegram alert claimed the paid proxy "answered").
+    "available in your country", "in your country", "geo-restricted", "geoblock",
+    "blocked it in your country",
 )
 
 
@@ -161,17 +165,13 @@ def probe_url_minutes(url: str, allow_paid: bool = True) -> float:
 
     bgutil_http = os.environ.get("BGUTIL_BASE_URL", "").strip()
     bgutil_script = os.environ.get("BGUTIL_SCRIPT_PATH", "").strip()
-    conservative = {"youtube": {"player_client": ["tv_embed", "android", "mweb", "web"],
-                                "player_skip": ["webpage", "configs"]}}
-    # Try the bgutil/HD extractor first (http or baked-in script), then the
-    # conservative one — mirrors the download's HD→fallback logic.
-    if bgutil_http:
-        hd = [{"youtubepot-bgutilhttp": {"base_url": [bgutil_http]}}]
-    elif bgutil_script:
-        hd = [{"youtubepot-bgutilscript": {"script_path": [bgutil_script]}}]
-    else:
-        hd = []
-    strategies = hd + [conservative]
+    # Same client lists as the download (yt_clients.py): the authed defaults
+    # alone answer "Video unavailable" for a share of videos on every IP, and
+    # each of those probes then paid the per-GB proxy for nothing.
+    from yt_clients import hd_extractor_args, fallback_extractor_args
+    hd_args = hd_extractor_args(bgutil_http, bgutil_script)
+    strategies = ([hd_args] if hd_args else []) + [
+        fallback_extractor_args(bgutil_http, bgutil_script)]
 
     # Rotated per probe to spread load across the pool, like the download does.
     statics = [p.strip() for p in

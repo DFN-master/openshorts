@@ -218,7 +218,10 @@ async def record_probe(event: dict):
     await _persist("probe", event.get("job_id"), url_host, "paid-probe",
                    int(event.get("bytes_estimate") or 0), event)
     fails = "\n".join(f"  {k}: {str(v)[:140]}" for k, v in (event.get("static_errors") or {}).items())
-    await _alert(f"probe {url_host or '?'}: statics failed, paid proxy answered"
+    paid_failed = event.get("paid_failed")
+    outcome = (f"paid proxy failed too: {str(paid_failed)[:140]}" if paid_failed
+               else "paid proxy answered")
+    await _alert(f"probe {url_host or '?'}: statics failed, {outcome}"
                  + (f"\n{fails}" if fails else ""), int(event.get("bytes_estimate") or 0))
 
 
